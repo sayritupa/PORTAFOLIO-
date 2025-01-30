@@ -1,0 +1,69 @@
+# Instalar y cargar librerías necesarias
+if (!require("shiny")) install.packages("shiny", dependencies = TRUE)
+if (!require("Deriv")) install.packages("Deriv", dependencies = TRUE)
+library(shiny)
+library(Deriv)
+
+# Interfaz de usuario (UI)
+ui <- fluidPage(
+  titlePanel("Verificación de Convexidad de una Función"),
+  sidebarLayout(
+    sidebarPanel(
+      textInput("funcion", "Ingrese la función f(x):", value = "x^2"),
+      sliderInput("dominio", "Seleccione el dominio:", min = -10, max = 10, value = c(-5, 5)),
+      actionButton("calcular", "Calcular Convexidad")
+    ),
+    mainPanel(
+      plotOutput("plot"),
+      verbatimTextOutput("derivadas"),
+      verbatimTextOutput("resultado")
+    )
+  )
+)
+
+# Servidor (Server)
+server <- function(input, output) {
+  observeEvent(input$calcular, {
+    # Definir la función ingresada por el usuario
+    f <- function(x) eval(parse(text = input$funcion))
+    
+    # Calcular derivadas simbólicas
+    f_prime <- Deriv(f, "x")      # Primera derivada
+    f_double_prime <- Deriv(f_prime, "x")  # Segunda derivada
+    
+    # Evaluar las derivadas en el dominio seleccionado
+    x_vals <- seq(input$dominio[1], input$dominio[2], length.out = 100)
+    f_vals <- sapply(x_vals, f)
+    f_prime_vals <- sapply(x_vals, f_prime)
+    f_double_prime_vals <- sapply(x_vals, f_double_prime)
+    
+    # Verificar convexidad (segunda derivada >= 0 en todo el dominio)
+    is_convex <- all(f_double_prime_vals >= 0)
+    resultado_texto <- if (is_convex) {
+      "✅ La función es convexa en el dominio seleccionado."
+    } else {
+      "❌ La función NO es convexa en el dominio seleccionado."
+    }
+    
+    # Mostrar derivadas
+    output$derivadas <- renderText({
+      paste("Primera derivada: f'(x) =", deparse(f_prime), "\n",
+            "Segunda derivada: f''(x) =", deparse(f_double_prime), "\n")
+    })
+    
+    # Mostrar resultado de convexidad
+    output$resultado <- renderText({ resultado_texto })
+    
+    # Graficar función y derivadas
+    output$plot <- renderPlot({
+      plot(x_vals, f_vals, type="l", col="blue", lwd=2, ylim=range(c(f_vals, f_prime_vals, f_double_prime_vals)),
+           main="Función y sus Derivadas", xlab="x", ylab="Valores")
+      lines(x_vals, f_prime_vals, col="red", lwd=2, lty=2)  # Primera derivada
+      lines(x_vals, f_double_prime_vals, col="green", lwd=2, lty=3)  # Segunda derivada
+      legend("topright", legend=c("f(x)", "f'(x)", "f''(x)"), col=c("blue", "red", "green"), lwd=2, lty=c(1,2,3))
+    })
+  })
+}
+
+# Ejecutar la aplicación Shiny
+shinyApp(ui = ui, server = server)
